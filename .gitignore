@@ -8,3 +8,11 @@
 */__pycache__
 *.wrl
 *.root
+*/analysis_output
+analysis_output/01_energy_spectrum.png
+analysis_output/02_transaxial_position.png
+analysis_output/03_axial_position.png
+analysis_output/04_time_distribution.png
+analysis_output/05_position_density_2d.png
+analysis_output/06_angular_distribution.png
+analysis_output/analysis_report.txt

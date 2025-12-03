@@ -5,7 +5,7 @@ from tools.pet_helpers import add_vereos_digitizer_v1
 from opengate.geometry.utility import get_circular_repetition
 
 
-experiment_name = "validate pos2"
+experiment_name = "validate_pos2"
 # ---- folders
 output_path = Path("data/output/posvalidation")
 output_path.mkdir(parents=True, exist_ok=True)
