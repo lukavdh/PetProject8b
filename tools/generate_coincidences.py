@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
 Coincidence Generator - Post-Processing
+========================================
+
+Genera coincidenze da dati Singles.
+
+Parametro rotating:
+- False: usa tutti i singles (full ring)
+- True: filtra singles per simulare 2 moduli rotanti (EasyPET)
 """
 
 import numpy as np
@@ -9,19 +16,50 @@ import uproot
 
 
 def generate_coincidences(input_file, output_file, 
-                          time_window_ns=1.0,
-                          min_angle_deg=60.0,
-                          input_tree="Singles5"):
-    """Generate coincidences from Singles data."""
+                          time_window_ns=4.5,
+                          min_angle_deg=100.0,
+                          input_tree="Singles5",
+                          rotating=False,
+                          n_intervals=9):
+    """
+    Generate coincidences from Singles data.
+    
+    Parameters
+    ----------
+    input_file : str
+        Path to input ROOT file
+    output_file : str
+        Path to output ROOT file
+    time_window_ns : float
+        Coincidence time window in nanoseconds
+    min_angle_deg : float
+        Minimum angular separation in degrees
+    input_tree : str
+        Name of input tree
+    rotating : bool
+        If True, filter singles to simulate rotating 2-module EasyPET
+    n_intervals : int
+        Number of rotation intervals (only used if rotating=True)
+        
+    Returns
+    -------
+    int
+        Number of coincidences found
+    """
     
     print()
     print("=" * 60)
-    print("  COINCIDENCE GENERATOR")
+    if rotating:
+        print("  COINCIDENCE GENERATOR (EasyPET Rotating)")
+    else:
+        print("  COINCIDENCE GENERATOR (Full Ring)")
     print("=" * 60)
     print(f"  Input:  {input_file}")
     print(f"  Output: {output_file}")
     print(f"  Time window: {time_window_ns} ns")
     print(f"  Min angle: {min_angle_deg} deg")
+    if rotating:
+        print(f"  Rotating mode: {n_intervals} intervals")
     print("=" * 60)
     
     # Load Singles data
@@ -38,6 +76,25 @@ def generate_coincidences(input_file, output_file,
     n_singles = len(x)
     print(f"  Loaded {n_singles} singles")
     
+    # Filter for rotating mode
+    if rotating:
+        from tools.filter_rotating import filter_singles_rotating, print_filter_stats
+        
+        print("\n  Applying rotation filter...")
+        mask, stats = filter_singles_rotating(x, y, z, energy, time, rotation_speed_deg_per_sec=90.0)
+        print_filter_stats(stats)
+        
+        # Apply filter
+        x = x[mask]
+        y = y[mask]
+        z = z[mask]
+        energy = energy[mask]
+        time = time[mask]
+        
+        n_singles = len(x)
+        print(f"\n  Singles after filter: {n_singles}")
+    
+    # Calculate angles
     angles = np.arctan2(y, x)
     
     # Adjust time window to data scale
@@ -58,7 +115,7 @@ def generate_coincidences(input_file, output_file,
     energy, time, angles = energy[sort_idx], time[sort_idx], angles[sort_idx]
     
     # Find coincidences
-    print("  Finding coincidences...")
+    print("\n  Finding coincidences...")
     
     coinc = {
         'globalPosX1': [], 'globalPosY1': [], 'globalPosZ1': [],
@@ -100,9 +157,11 @@ def generate_coincidences(input_file, output_file,
         print("  WARNING: No coincidences found!")
         return 0
     
+    # Convert to arrays
     for key in coinc:
         coinc[key] = np.array(coinc[key])
     
+    # Add metadata fields
     coinc['eventID1'] = np.arange(n_coinc)
     coinc['eventID2'] = np.arange(n_coinc)
     coinc['comptonPhantom1'] = np.zeros(n_coinc, dtype=np.int32)
@@ -113,19 +172,22 @@ def generate_coincidences(input_file, output_file,
     coinc['sourceID2'] = np.zeros(n_coinc, dtype=np.int32)
     coinc['runID'] = np.zeros(n_coinc, dtype=np.int32)
     
-    print(f"  Saving to {output_file}...")
+    # Save
+    print(f"\n  Saving to {output_file}...")
     with uproot.recreate(output_file) as fout:
         fout["Coincidences"] = coinc
+    
     print(f"  SUCCESS: {n_coinc} coincidences saved")
+    
     return n_coinc
 
 
 def generate_coincidences_partial_ring(input_file, output_file, input_tree="Singles5"):
-    """Generate coincidences for partial ring (2 modules)."""
+    """Generate coincidences for partial ring (2 static modules)."""
     
     print()
     print("=" * 60)
-    print("  COINCIDENCE GENERATOR (Partial Ring)")
+    print("  COINCIDENCE GENERATOR (Partial Ring - Static)")
     print("=" * 60)
     
     f = uproot.open(input_file)
@@ -199,12 +261,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Input ROOT file")
     parser.add_argument("output", help="Output ROOT file")
-    parser.add_argument("--partial-ring", action="store_true")
-    parser.add_argument("--time-window", type=float, default=1.0)
-    parser.add_argument("--min-angle", type=float, default=60.0)
+    parser.add_argument("--partial-ring", action="store_true",
+                        help="Use partial ring mode (2 static modules)")
+    parser.add_argument("--rotating", action="store_true",
+                        help="Use rotating mode (EasyPET simulation)")
+    parser.add_argument("--n-intervals", type=int, default=9,
+                        help="Number of rotation intervals (default: 9)")
+    parser.add_argument("--time-window", type=float, default=4.5,
+                        help="Time window in ns (default: 4.5)")
+    parser.add_argument("--min-angle", type=float, default=100.0,
+                        help="Minimum angle in degrees (default: 100)")
     args = parser.parse_args()
     
     if args.partial_ring:
         generate_coincidences_partial_ring(args.input, args.output)
     else:
-        generate_coincidences(args.input, args.output, args.time_window, args.min_angle)
+        generate_coincidences(
+            args.input, 
+            args.output, 
+            args.time_window, 
+            args.min_angle,
+            rotating=args.rotating,
+            n_intervals=args.n_intervals
+        )
