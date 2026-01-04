@@ -8,7 +8,16 @@ sys.path.insert(0, '.')
 from tools.generate_coincidences import generate_coincidences
 from test_analysis import plot_coincidences
 
+import argparse
+import sys
 
+# ---- Setup Arguments (The "Settings" listener) - heeere
+parser = argparse.ArgumentParser()
+parser.add_argument("--iso", required=True, help="Isotope (e.g., F18)")
+parser.add_argument("--rep", type=int, required=True, help="Repetition Number (1, 2, 3)")
+parser.add_argument("--radius", type=float, default=0.0, help="Source radius in mm")
+parser.add_argument("--z_pos", type=float, required=True, help="Z Position in cm")
+args = parser.parse_args()
 experiment_name = "validate_pos2"
 # ---- folders
 output_path = Path("data/output/posvalidation")
@@ -57,18 +66,22 @@ if __name__ == "__main__":
     source1 = sim.add_source("GenericSource", "hot_sphere_source_1")
     source1.attached_to = "world"
     source1.particle = "e+"
-    source1.energy.type = "Na22"          # built-in β+ spectrum
+    #source1.position.type = "sphere"
+    #source1.position.radius = args.radius * mm
+    source1.energy.type = args.iso          # built-in β+ spectrum
     source1.activity = 10000 * Bq
     source1.half_life = 2.6 * 365.25 * 24 * 3600 * sec
-    source1.position.translation = [-5 * cm, 5 * cm, 0]
+    source1.position.translation = [-5 * cm, 5 * cm, -args.z_pos * cm]
 
     source2 = sim.add_source("GenericSource", "hot_sphere_source_2")
     source2.attached_to = "world"
     source2.particle = "e+"
-    source2.energy.type = "Na22"
+    #source2.position.type = "sphere"
+    #source2.position.radius = args.radius * mm
+    source2.energy.type = args.iso
     source2.activity = 10000 * Bq
     source2.half_life = 2.6 * 365.25 * 24 * 3600 * sec
-    source2.position.translation = [5 * cm, -5 * cm, 0]
+    source2.position.translation = [5 * cm, -5 * cm, args.z_pos * cm]
 
     # ---- physics
     sim.physics_manager.physics_list_name = "G4EmStandardPhysics_option3"
@@ -94,9 +107,6 @@ if __name__ == "__main__":
     # ---- go
     sim.run()
 
-    # ==========================================================================
-    # POST-PROCESSING AUTOMATICO
-    # ==========================================================================
     
     print("\n" + "="*60)
     print("  POST-PROCESSING")
@@ -108,7 +118,8 @@ if __name__ == "__main__":
     
     # 1. Genera coincidenze
     n_coinc = generate_coincidences(singles_file, coinc_file, rotating=simple)
-    
+    iso1 = args.iso           
+    z1 = args.z_pos
     # 2. Visualizza
     if n_coinc > 0:
         # Nome file con info moduli
@@ -117,9 +128,9 @@ if __name__ == "__main__":
         else:
             mode = "18mod_fullring"
         
-        output_image = output_path / f"LOR_{experiment_name}_{mode}_{n_coinc}coinc.png"
+        output_image = output_path / f"{iso1}_{z1}cm_{n_coinc}coinc.png"
         plot_coincidences(coinc_file, output_file=str(output_image), 
-                          title=f"{experiment_name} - {mode} - {n_coinc} coincidences")
+                          title=f"{iso1} - {n_coinc} coincidences - {z1}cm displacement")
     
     print("\n" + "="*60)
     print("  COMPLETE")
